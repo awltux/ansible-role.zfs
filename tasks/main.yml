@@ -70,34 +70,68 @@
   no_log: true
   changed_when: false
 
-- name: 'Load zfs module for this session'
-  modprobe:
-    name: zfs
-    state: present
+- name: 'Configure ZFS kernel Module
   when: zfs_module_loading.stat.exists == False
+  block:
+    - name: 'Load zfs module for this session'
+      modprobe:
+        name: zfs
+        state: present
 
-- name: 'Ensure zfs module is loaded during boot sequence'
-  blockinfile:
-    path: /etc/modules-load.d/zfs.conf
-    create: true
-    block: |
-      # Load zfs kernel module
-      zfs
+    - name: 'Ensure zfs module is loaded during boot sequence'
+      blockinfile:
+        path: /etc/modules-load.d/zfs.conf
+        create: true
+        block: |
+          # Load zfs kernel module
+          zfs
 
-- name: Disable the import cache as it can cause problems as zfs pool changes
-  service:
-    name: zfs-import-cache
-    enabled: true
+- name: 'Check if spf module will load during reboot'
+  stat:
+    path: /etc/modules-load.d/spf.conf
+  register: spf_module_loading
+  no_log: true
+  changed_when: false
 
-- name: Enable the import-scan to scan devices
-  service:
-    name: zfs-import-scan
-    enabled: true
+- name: 'Configure spf kernel Module
+  when: spf_module_loading.stat.exists == False
+  block:
+    - name: 'Load spf module for this session'
+      modprobe:
+        name: spf
+        state: present
 
-- name: Delete unused zfs cache file
-  file:
-    state: absent
-    path: "/etc/zfs/zpool.cache"
+    - name: 'Ensure spf module is loaded during boot sequence'
+      blockinfile:
+        path: /etc/modules-load.d/spf.conf
+        create: true
+        block: |
+          # Load spf kernel module to support zfs
+          spf
 
-- name: rebuild the initramfs excluding the zpool cache
-  shell: dracut -fv --kver `uname -r`
+# TODO: Remove this once molecule runs in VM
+- name: Is this running in a container
+  stat:
+    path: /boot
+  register: inside_container
+  
+- name: Configure systemd services
+  when: inside_container.stat.isdir is not defined or not inside_container.stat.isdir
+  block:
+    - name: Disable the import cache as it can cause problems as zfs pool changes
+      service:
+        name: zfs-import-cache
+        enabled: false
+
+    - name: Enable the import-scan to scan devices
+      service:
+        name: zfs-import-scan
+        enabled: true
+
+    - name: Delete unused zfs cache file
+      file:
+        state: absent
+        path: "/etc/zfs/zpool.cache"
+
+    - name: Rebuild the initramfs excluding the zpool cache
+      shell: 'dracut -fv --kver {{ ansible_kernel }}'
