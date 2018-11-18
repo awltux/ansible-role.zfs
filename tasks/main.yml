@@ -30,7 +30,7 @@
 
 - name: Install additional package dependencies
   yum:
-    name: {{ zfs_install_dependencies }}  
+    name: '{{ zfs_install_dependencies }}'
   vars:
     zfs_install_dependencies:
       - 'kernel-devel-{{ ansible_kernel }}'
@@ -39,7 +39,7 @@
       - libselinux-python
       - grub2-efi-x64-modules
       - gdisk
-      - rpcbind'
+      - rpcbind
 
 - name: 'Install zfs repo config for CentOS'
   yum:

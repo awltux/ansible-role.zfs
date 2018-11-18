@@ -14,7 +14,7 @@ def test_hosts_file(host):
     assert f.user == 'root'
     assert f.group == 'root'
 
-# zpool tool available 
+# zpool tool available
 
 # zfs tool available
 
@@ -27,4 +27,3 @@ def test_hosts_file(host):
 # Can snapshot datapath
 
 # Can clone snapshot
-
