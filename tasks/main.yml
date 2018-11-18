@@ -6,20 +6,20 @@
   fail:
     msg: 'This is Centos {{ ansible_distribution_version }}'
   when: ansible_distribution|lower == 'centos' and ansible_distribution_version != '.'.join(('7', centos_minor_version, centos_build_version))
- 
-#- name: Set SELinux to permissive in current session
-#  shell: setenforce 0
 
-#- name: Set SELinux to permissive after reboot
-#  lineinfile:
-#    path: /etc/selinux/config
-#    regexp: '^SELINUX='
-#    line: 'SELINUX=permissive'
-    
+# - name: Set SELinux to permissive in current session
+#   shell: setenforce 0
+
+# - name: Set SELinux to permissive after reboot
+#   lineinfile:
+#     path: /etc/selinux/config
+#     regexp: '^SELINUX='
+#     line: 'SELINUX=permissive'
+
 - name: 'Identify the rpm distribution'
   shell: rpm -E %dist
   args:
-    warn: no
+    warn: false
   register: rpm_dist
   changed_when: false
 
@@ -31,7 +31,7 @@
 - name: Install additional package dependencies
   package:
     name: libselinux-python, grub2-efi-x64-modules, gdisk, rpcbind
- 
+
 - name: Upgrade Distro packages
   package:
     name: "*"
@@ -42,7 +42,7 @@
     set -e   # prevent silent failures
     rpm_distribution={{ rpm_dist.stdout }}
 
-    # find the latest installed kernel image; 
+    # find the latest installed kernel image;
     # strip end of kernel name '${rpm_distribution}.x86_64' to make it possible to compare.
     hardwarePlatform=$(uname -i)
     installedKernel=$(
@@ -76,14 +76,14 @@
 - name: Kernel is correct version. Install ZFS packages and dependencies.
   package:
     name: zfs, zfs-dracut
- 
+
 - name: Copy zmogrify template onto target system
   template:
     src: "{{ role_path }}/templates/zmogrify"
     dest: /usr/local/sbin/
     mode: u=rwx,g=r,o=r
 
-- name: Kernel upgrades should trigger a zfs driver rebuild 
+- name: Kernel upgrades should trigger a zfs driver rebuild
   file:
     src: "/usr/local/sbin/zmogrify"
     dest: "/etc/kernel/postinst.d/zmogrify"
@@ -105,7 +105,7 @@
 - name: 'Ensure zfs module is loaded during boot sequence'
   blockinfile:
     path: /etc/modules-load.d/zfs.conf
-    create: yes
+    create: true
     block: |
       # Load zfs kernel module
       zfs
@@ -113,17 +113,17 @@
 - name: Disable the import cache as it can cause problems as zfs pool changes
   service:
     name: zfs-import-cache
-    enabled: no
+    enabled: true
 
-- name: Enable the import-scan to scan devices 
+- name: Enable the import-scan to scan devices
   service:
     name: zfs-import-scan
-    enabled: yes
+    enabled: true
 
- - name: Delete unused zfs cache file
-   file:
-     state: absent
-     path: "/etc/zfs/zpool.cache"
+- name: Delete unused zfs cache file
+  file:
+    state: absent
+    path: "/etc/zfs/zpool.cache"
 
 - name: rebuild the initramfs excluding the zpool cache
   shell: dracut -fv --kver `uname -r`
