@@ -2,12 +2,17 @@
 dependency:
   name: galaxy
 driver:
-  name: docker
+  name: vagrant
+  provider:
+    name: virtualbox
 lint:
   name: yamllint
 platforms:
-  - name: instance
-    image: centos:7.5.1804
+  - name: centos
+    box: 'centos/7'
+    box_version: '1804.02'
+    provider_options:
+      gui: false
 provisioner:
   name: ansible
   lint:
@@ -16,6 +21,8 @@ provisioner:
       x: ["ANSIBLE0012,ANSIBLE0013"]
 scenario:
   name: default
+  converge_sequence:
+    - create
 verifier:
   name: testinfra
   lint:

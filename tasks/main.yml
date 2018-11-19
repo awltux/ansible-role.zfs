@@ -70,7 +70,7 @@
   no_log: true
   changed_when: false
 
-- name: 'Configure ZFS kernel Module
+- name: 'Configure ZFS kernel Module'
   when: zfs_module_loading.stat.exists == False
   block:
     - name: 'Load zfs module for this session'
@@ -93,7 +93,7 @@
   no_log: true
   changed_when: false
 
-- name: 'Configure spf kernel Module
+- name: 'Configure spf kernel Module'
   when: spf_module_loading.stat.exists == False
   block:
     - name: 'Load spf module for this session'
@@ -114,7 +114,7 @@
   stat:
     path: /boot
   register: inside_container
-  
+
 - name: Configure systemd services
   when: inside_container.stat.isdir is not defined or not inside_container.stat.isdir
   block:
