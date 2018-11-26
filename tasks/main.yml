@@ -30,15 +30,25 @@
 
 - name: Install additional package dependencies
   yum:
-    name: 'kernel-devel-{{ ansible_kernel }}, libselinux-python, grub2-efi-x64-modules, gdisk, rpcbind'
+    name: {{ zfs_install_dependencies }}  
+  vars:
+    zfs_install_dependencies:
+      - 'kernel-devel-{{ ansible_kernel }}'
+      - 'kernel-headers-{{ ansible_kernel }}'
+      - dkms
+      - libselinux-python
+      - grub2-efi-x64-modules
+      - gdisk
+      - rpcbind'
 
 - name: 'Install zfs repo config for CentOS'
-  package:
+  yum:
     name: 'http://download.zfsonlinux.org/epel/zfs-release{{ rpm_dist.stdout }}_{{ centos_minor_version }}.noarch.rpm'
+    disable_gpg_check: true
   when: ansible_distribution|lower == 'centos'
 
 - name: Kernel is correct version. Install ZFS packages and dependencies.
-  package:
+  yum:
     name: zfs, zfs-dracut
 
 - name: Copy zmogrify template onto target system
