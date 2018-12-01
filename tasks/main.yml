@@ -28,7 +28,7 @@
     name: 'epel-release'
   when: ansible_distribution|lower == 'centos'
 
-- name: Install additional package dependencies
+- name: Install zfs kernel module dependencies
   yum:
     name: '{{ zfs_install_dependencies }}'
   vars:
@@ -36,12 +36,8 @@
       - 'kernel-devel-{{ ansible_kernel }}'
       - 'kernel-headers-{{ ansible_kernel }}'
       - dkms
-      - libselinux-python
-      - grub2-efi-x64-modules
-      - gdisk
-      - rpcbind
 
-- name: 'Install zfs repo config for CentOS'
+- name: 'Configure yum to use zfs repo'
   yum:
     name: 'http://download.zfsonlinux.org/epel/zfs-release{{ rpm_dist.stdout }}_{{ centos_minor_version }}.noarch.rpm'
     disable_gpg_check: true
@@ -109,29 +105,15 @@
           # Load spf kernel module to support zfs
           spf
 
-# TODO: Remove this once molecule runs in VM
-- name: Is this running in a container
-  stat:
-    path: /boot
-  register: inside_container
-
-- name: Configure systemd services
-  when: inside_container.stat.isdir is not defined or not inside_container.stat.isdir
-  block:
-    - name: Disable the import cache as it can cause problems as zfs pool changes
-      service:
-        name: zfs-import-cache
-        enabled: false
-
-    - name: Enable the import-scan to scan devices
-      service:
-        name: zfs-import-scan
-        enabled: true
-
-    - name: Delete unused zfs cache file
-      file:
-        state: absent
-        path: "/etc/zfs/zpool.cache"
-
-    - name: Rebuild the initramfs excluding the zpool cache
-      shell: 'dracut -fv --kver {{ ansible_kernel }}'
+- name: Ensure the zfs services are started during boot
+  service:
+    name: '{{ item }}'
+    state: started
+    enabled: true
+  with_items:
+    - zfs-import-cache
+    - zfs-import-scan
+    - zfs-mount
+    - zfs-share
+    - zfs-zed
+    - zfs.target

@@ -2,17 +2,9 @@
 dependency:
   name: galaxy
 driver:
-  name: vagrant
-  provider:
-    name: virtualbox
+  name: docker
 lint:
   name: yamllint
-platforms:
-  - name: centos
-    box: 'centos/7'
-    box_version: '1804.02'
-    provider_options:
-      gui: false
 provisioner:
   name: ansible
   lint:
