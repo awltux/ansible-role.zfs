@@ -1,0 +1,148 @@
+---
+# © Awltux Ltd 2019
+# Licence: http://www.apache.org/licenses/LICENSE-2.0
+
+- name: 'Identify the rpm distribution'
+  shell: rpm -E %dist
+  args:
+    warn: false
+  register: rpm_dist
+  changed_when: false
+
+- name: 'Install epel repository config'
+  when: ansible_distribution|lower == 'centos'
+  yum:
+    name: 'epel-release'
+
+- name: 'Install zfs repository config'
+  yum:
+    name: 'http://download.zfsonlinux.org/epel/zfs-release{{ rpm_dist.stdout }}_{{ centos_minor_version }}.noarch.rpm'
+    disable_gpg_check: true
+    validate_certs: false
+
+- name: Check if mainline kernel is installed
+  package:
+    name: kernel-ml
+    state: present
+  check_mode: true
+  register: mainline_kernel_check
+
+- name: Install mainline kernel devel packages
+  yum:
+    name: '{{ kernel_devel_packages }}'
+  vars:
+    kernel_devel_packages:
+      - kernel-ml-devel-{{ ansible_kernel }}
+      - kernel-ml-headers-{{ ansible_kernel }}
+  # kernel-ml is already installed
+  when: mainline_kernel_check is not changed
+
+- name: Install default kernel devel packages
+  yum:
+    name: '{{ kernel_devel_packages }}'
+  vars:
+    kernel_devel_packages:
+      - kernel-devel-{{ ansible_kernel }}
+      - kernel-headers-{{ ansible_kernel }}
+  # kernel-ml is already installed
+  when: mainline_kernel_check is changed
+
+- name: Install additional package dependencies for zfs
+  yum:
+    name: '{{ zfs_package_dependencies }}'
+  vars:
+    zfs_package_dependencies:
+      - dkms
+      - libselinux-python
+      - grub2-efi-x64-modules
+      - gdisk
+      - rpcbind
+
+- name: Probe yum to see if ZFS package already installed
+  yum:
+    name: zfs
+    state: present
+  check_mode: true
+  register: zfs_package_probe
+  
+- name: '[IGNORE_IF_FAILED] If ZFS package installed, check for broken zfs kernel module'
+  when: not zfs_package_probe.changed
+  modprobe: 
+    name: zfs
+    state: present
+  ignore_errors: true
+  register: zfs_modprobe
+  
+- name: '[IGNORE_IF_FAILED] Uninstall ZFS packages if previous ZFS install failed'
+  when: 
+    - not zfs_package_probe.changed 
+    - zfs_modprobe is failed
+  yum:
+    name: "{{ item }}"
+    state: absent
+  with_items:
+    - zfs
+    - zfs-kmod
+    - spl
+    - spl-kmod
+    - libzfs2
+    - libnvpair1
+    - libuutil1
+    - libzpool2
+  ignore_errors: true
+
+- name: Install ZFS packages and dependencies and rebuild kernel modules.
+  yum:
+    name: '{{ zfs_package_list }}'
+  vars:
+    zfs_package_list:
+      - zfs
+      - zfs-dracut
+
+- name: Copy zmogrify template onto target system
+  template:
+    src: "{{ role_path }}/templates/zmogrify"
+    dest: /usr/local/sbin/
+    mode: u=rwx,g=r,o=r
+
+- name: Kernel upgrades should trigger a zfs driver rebuild
+  file:
+    src: "/usr/local/sbin/zmogrify"
+    dest: "/etc/kernel/postinst.d/zmogrify"
+    state: link
+
+- name: 'Check if zfs module will load during reboot'
+  stat:
+    path: /etc/modules-load.d/zfs.conf
+  register: zfs_module_loading
+  no_log: true
+  changed_when: false
+
+- name: 'Persist zfs module loading'
+  when: zfs_module_loading.stat.exists == False
+  block:
+    - name: 'Ensure zfs module is loaded during boot sequence'
+      blockinfile:
+        path: /etc/modules-load.d/zfs.conf
+        create: true
+        block: |
+          # Load zfs kernel module
+          zfs
+
+    - name: 'Load zfs module for this session'
+      modprobe:
+        name: zfs
+        state: present
+
+- name: Enable ZFS services so they start after reboot
+  service:
+    name: '{{ item }}'
+    enabled: true
+    state: started
+  with_items:
+    - zfs-import-cache
+    - zfs-import-scan
+    - zfs-mount
+    - zfs-share
+    - zfs-zed
+    - zfs.target

@@ -1,4 +1,11 @@
 ---
-centos_minor_version: '5'
-centos_build_version: '1804'
-...
+# © Awltux Ltd 2019
+# Licence: http://www.apache.org/licenses/LICENSE-2.0
+
+zfs_zpool_block_device_size: '2G'
+zfs_zpool_scm_manager_zpool_name: 'scm-manager'
+
+centos_version: '{{ ansible_distribution_version }}'
+centos_major_version: "{{ centos_version.split('.')[0] }}"
+centos_minor_version: "{{ centos_version.split('.')[1] }}"
+centos_patch_version: "{{ centos_version.split('.')[2] }}"

@@ -1,0 +1,96 @@
+---
+# © Awltux Ltd 2019
+# Licence: http://www.apache.org/licenses/LICENSE-2.0
+
+- name: Find unused SCSI storage devices
+  shell: |
+    #!/bin/bash -e
+    
+    # Get a list of scsi block devices
+    scsiBlockDevices=$(lsblk -Sn -o NAME,SIZE | grep {{ zfs_zpool_block_device_size }} | awk '{print "/dev/"$1}')
+    while read scsi_device; do
+      if ! ( mount | grep '${scsi_device}' >/dev/null); then
+        # This disk is not used by mount
+        echo "${scsi_device}"
+      fi
+    done <<< ${scsiBlockDevices} 
+  register: scsi_drive_list
+  changed_when: false
+
+- name: '[IGNORE_IF_FAILED] Is there a pool curently defined?'
+  shell: |
+    #!/bin/bash -e
+    if zpool list {{ zfs_zpool_scm_manager_zpool_name }} >/dev/null; then
+      echo "zpool exists: {{ zfs_zpool_scm_manager_zpool_name }}"
+      exit 0
+    else
+      echo "zpool not created yet: {{ zfs_zpool_scm_manager_zpool_name }}"
+      exit 1
+    fi
+  register: zpool_exists
+  changed_when: false
+  ignore_errors: true
+  
+- name: Create a pool with unmounted disk devices
+  when: zpool_exists is failure
+  block:
+    - name: 'Check if drives available for zpool: {{ scsi_drive_list.stdout }}'
+      fail:
+        msg: 'No drives available to create zpool'
+      when: scsi_drive_list.stdout == '' 
+  
+    - name: Find storage devices not currently used by zpool
+      shell: |
+        #!/bin/bash -e
+        for device_name in {{ scsi_drive_list.stdout }}; do
+          if ! (zpool list -vLHP | grep "${device_name}" >/dev/null); then
+            # This disk is not used by zpool
+            echo "${device_name}"
+          fi
+        done
+      register: zpool_drive_list
+      changed_when: false
+
+    - name: Create new zpool 
+      shell: |
+        #!/bin/bash -e
+        zpool create {{ zfs_zpool_scm_manager_zpool_name }} {{ drive_list }}
+      vars:
+        # Strip out the EOL characters before inserting into shell script
+        drive_list: "{{ zpool_drive_list.stdout | replace( '\r\n', ' ') }}"
+      when: zpool_drive_list.stdout != ''
+  
+- name: Extend the pool if present
+  when: zpool_exists
+  block:
+    - name: Find storage devices not currently used by zpool
+      shell: |
+        #!/bin/bash -e
+        for device_name in {{ scsi_drive_list.stdout }}; do
+          if ! (zpool list -vLHP | grep "${device_name}" >/dev/null); then
+            # This disk is not used by zpool
+            echo "${device_name}"
+          fi
+        done
+      register: zpool_drive_list
+      changed_when: false
+
+    - name: Add storage devices to zpool
+      shell: |
+        #!/bin/bash -e
+        zpool add {{ zfs_zpool_scm_manager_zpool_name }} {{ drive_list }}
+      vars:
+        # Strip out the EOL characters before inserting into shell script
+        drive_list: "{{ zpool_drive_list.stdout | replace( '\r\n', ' ') }}"
+      when: zpool_drive_list.stdout != ''
+  
+- name: Set zpool default attributes
+  zfs:
+    name: '{{ zfs_zpool_scm_manager_zpool_name }}'
+    state: present
+    extra_zfs_properties:
+      compression: lz4
+      xattr: sa
+      acltype: posixacl
+      
+      

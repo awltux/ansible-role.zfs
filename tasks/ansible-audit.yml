@@ -1,0 +1,25 @@
+---
+# © Awltux Ltd 2019
+# Licence: http://www.apache.org/licenses/LICENSE-2.0
+
+- name: 'ROLE_INSTALLED={{ role_path|basename }}'
+  changed_when: false
+  file:
+    state: '{{ item.state }}'
+    path: '{{ item.path }}'
+  vars:
+    action_list:
+      - state: directory
+        path: /var/log/ansible
+      - state: touch
+        path: /var/log/ansible/{{ role_path|basename }}.applied
+  with_items: '{{ action_list }}'
+  
+- name: Extract git hash for current role
+  git:
+  repo: 'file:///{{ role_path }}'
+    clone: false
+    update: false
+    dest: {{ role_path }}
+  register: git_metadata_for_role
+  
